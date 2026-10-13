@@ -1,0 +1,1671 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Shawarma Shop API",
+    "description": "REST API для симулятора управления шаурмечной.\nУчебный проект для курса по автоматизации тестирования на Java.\n",
+    "contact": {
+      "name": "ThreadQA Team",
+      "email": "info@threadqa.ru"
+    },
+    "license": {
+      "name": "MIT License",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://shawarma.threadqa.ru",
+      "description": "Generated server url"
+    }
+  ],
+  "security": [
+    {
+      "bearer-jwt": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Orders",
+      "description": "Управление заказами"
+    },
+    {
+      "name": "Authentication",
+      "description": "API для аутентификации пользователей"
+    },
+    {
+      "name": "Events",
+      "description": "Лента доменных событий из Kafka (event_log)"
+    },
+    {
+      "name": "Payments",
+      "description": "Оплата заказов и webhook от платёжного провайдера"
+    },
+    {
+      "name": "Recipes",
+      "description": "Каталог рецептов"
+    },
+    {
+      "name": "Ingredients",
+      "description": "Управление складом (только OWNER)"
+    }
+  ],
+  "paths": {
+    "/api/v1/webhooks/payments": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Webhook от платёжного провайдера",
+        "description": "Принимает асинхронный callback от провайдера об изменении статуса платежа.",
+        "operationId": "webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/recipes/{id}/image": {
+      "post": {
+        "tags": [
+          "Recipes"
+        ],
+        "summary": "Загрузить изображение рецепта (multipart)",
+        "operationId": "uploadRecipeImage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Список заказов с пагинацией и фильтрами",
+        "description": "Single-user model: фильтра по customer нет, возвращаются все заказы.",
+        "operationId": "getOrders",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "PAID",
+                "PREPARING",
+                "DONE",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "minPrice",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "maxPrice",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "recipeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "pageable",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageOrderResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Создать заказ",
+        "description": "Создание идёт в статусе PENDING — оплатить через /pay.",
+        "operationId": "createOrder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{id}/pay": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Оплатить заказ",
+        "description": "Запускает оплату заказа через внешний платёжный провайдер.\n\nЗаголовок `Idempotency-Key` обязателен — повторный POST с тем же ключом\nвернёт уже созданный платёж, без повторного похода в провайдер\n(Requirement 6, AC#1 + AC#2).\n",
+        "operationId": "pay",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Уникальный ключ для дедупликации повторных запросов",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Отменить заказ",
+        "description": "Single-user model: отменяем PENDING. PREPARING/COMPLETED отменить нельзя.",
+        "operationId": "cancelOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ingredients/{id}/restock": {
+      "post": {
+        "tags": [
+          "Ingredients"
+        ],
+        "summary": "Пополнить запас",
+        "description": "Списывает стоимость с баланса магазина и увеличивает остаток.",
+        "operationId": "restockIngredient",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestockRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestockResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Вход в систему",
+        "description": "Аутентификация пользователя и получение JWT токена",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Неверные учетные данные",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/JwtResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Успешная аутентификация",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/JwtResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recipes/{id}": {
+      "get": {
+        "tags": [
+          "Recipes"
+        ],
+        "summary": "Получить рецепт по ID",
+        "operationId": "getRecipeById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Рецепт не найден",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Рецепт найден",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Recipes"
+        ],
+        "summary": "Обновить рецепт",
+        "operationId": "updateRecipe",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRecipeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Рецепт обновлён",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Рецепт не найден",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Имя уже занято",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recipes": {
+      "get": {
+        "tags": [
+          "Recipes"
+        ],
+        "summary": "Список рецептов с пагинацией и опциональным поиском",
+        "description": "Параметры `query` (часть имени) и `recipeSize` опциональны и комбинируются. Параметр `recipeSize` назван так специально, чтобы не конфликтовать с Pageable.size (количество записей на страницу).",
+        "operationId": "getAllRecipes",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipeSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SMALL",
+                "MEDIUM",
+                "LARGE"
+              ]
+            }
+          },
+          {
+            "name": "pageable",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageRecipeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recipes/{id}/reviews": {
+      "get": {
+        "tags": [
+          "Recipes"
+        ],
+        "summary": "Отзывы по рецепту (через GraphQL партнёра reviews-service)",
+        "description": "Прокси к partner/reviews. На отказ партнёра возвращает 502 Problem+JSON (Requirement 5, AC#4).",
+        "operationId": "getReviews",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Рецепт не найден",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPage"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Reviews service unavailable",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPage"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Страница отзывов",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recipes/{id}/ingredients": {
+      "get": {
+        "tags": [
+          "Recipes"
+        ],
+        "summary": "Состав рецепта",
+        "operationId": "getRecipeIngredients",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeIngredientResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{id}": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Получить заказ по ID",
+        "operationId": "getOrderById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{id}/preparation": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Прогресс приготовления заказа",
+        "description": "Возвращает текущий прогресс [0..100] и оценку оставшегося времени.",
+        "operationId": "getPreparation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderPreparationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{id}/payments": {
+      "get": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "История платежей по заказу",
+        "operationId": "listPayments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PaymentResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ingredients": {
+      "get": {
+        "tags": [
+          "Ingredients"
+        ],
+        "summary": "Список ингредиентов",
+        "description": "С `lowStock=true` фильтруется только ниже порогового запаса.",
+        "operationId": "getIngredients",
+        "parameters": [
+          {
+            "name": "lowStock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IngredientResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Список последних доменных событий",
+        "description": "Возвращает до `limit` (1..100) последних записей. С параметром `type` фильтрует по конкретному типу события.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventLogResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Получить информацию о текущем пользователе",
+        "operationId": "getCurrentUser",
+        "responses": {
+          "200": {
+            "description": "Данные пользователя получены",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PaymentWebhookRequest": {
+        "required": [
+          "status",
+          "txnId"
+        ],
+        "type": "object",
+        "properties": {
+          "txnId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SUCCEEDED",
+              "FAILED"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "signature": {
+            "type": "string"
+          }
+        },
+        "description": "Webhook callback от платёжного провайдера"
+      },
+      "CreateOrderRequest": {
+        "required": [
+          "payment",
+          "qty",
+          "recipeId"
+        ],
+        "type": "object",
+        "properties": {
+          "recipeId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "qty": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/PaymentChoice"
+          }
+        },
+        "description": "Создание заказа"
+      },
+      "PaymentChoice": {
+        "required": [
+          "method"
+        ],
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "CARD",
+              "CASH"
+            ]
+          }
+        }
+      },
+      "OrderResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PAID",
+              "PREPARING",
+              "DONE",
+              "CANCELLED"
+            ]
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/RecipeSlim"
+          },
+          "qty": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalPrice": {
+            "type": "number"
+          },
+          "placedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "etaAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/PaymentSlim"
+          }
+        },
+        "description": "Заказ"
+      },
+      "PaymentSlim": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "CARD",
+              "CASH"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "txnId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SUCCEEDED",
+              "FAILED"
+            ]
+          }
+        }
+      },
+      "RecipeSlim": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "string",
+            "enum": [
+              "SMALL",
+              "MEDIUM",
+              "LARGE"
+            ]
+          },
+          "price": {
+            "type": "number"
+          }
+        }
+      },
+      "PayRequest": {
+        "required": [
+          "method"
+        ],
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "CARD",
+              "CASH"
+            ]
+          }
+        }
+      },
+      "PaymentResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "CARD",
+              "CASH"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SUCCEEDED",
+              "FAILED"
+            ]
+          },
+          "txnId": {
+            "type": "string"
+          },
+          "failureReason": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Платёж по заказу"
+      },
+      "RestockRequest": {
+        "required": [
+          "qty"
+        ],
+        "type": "object",
+        "properties": {
+          "qty": {
+            "maximum": 10000,
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "Запрос на пополнение запаса ингредиента"
+      },
+      "RestockResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "onHand": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCost": {
+            "type": "number"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "description": "Результат пополнения запаса"
+      },
+      "LoginRequest": {
+        "required": [
+          "password",
+          "username"
+        ],
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "client"
+          },
+          "password": {
+            "type": "string",
+            "example": "123456"
+          }
+        },
+        "description": "Запрос аутентификации"
+      },
+      "JwtResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "JWT-токен и информация о пользователе"
+      },
+      "UpdateRecipeRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 0,
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 1000,
+            "minLength": 0,
+            "type": "string"
+          },
+          "price": {
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "type": "number"
+          }
+        },
+        "description": "PATCH-обновление рецепта"
+      },
+      "RecipeIngredientView": {
+        "type": "object",
+        "properties": {
+          "ingredientId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "qtyNeeded": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "description": "Состав рецепта: id ингредиента + сколько нужно"
+      },
+      "RecipeRating": {
+        "type": "object",
+        "properties": {
+          "recipeId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "averageStars": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalReviews": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "topComplaint": {
+            "type": "string"
+          },
+          "trend": {
+            "type": "string"
+          }
+        },
+        "description": "Рейтинг рецепта от reviews-service (GraphQL)"
+      },
+      "RecipeResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "string",
+            "enum": [
+              "SMALL",
+              "MEDIUM",
+              "LARGE"
+            ]
+          },
+          "price": {
+            "type": "number"
+          },
+          "prepSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeIngredientView"
+            }
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/RecipeRating"
+          }
+        },
+        "description": "Рецепт"
+      },
+      "Pageable": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PageRecipeResponse": {
+        "type": "object",
+        "properties": {
+          "totalPages": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeResponse"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/SortObject"
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "numberOfElements": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageable": {
+            "$ref": "#/components/schemas/PageableObject"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PageableObject": {
+        "type": "object",
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/SortObject"
+          },
+          "unpaged": {
+            "type": "boolean"
+          },
+          "paged": {
+            "type": "boolean"
+          },
+          "pageNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SortObject": {
+        "type": "object",
+        "properties": {
+          "empty": {
+            "type": "boolean"
+          },
+          "sorted": {
+            "type": "boolean"
+          },
+          "unsorted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Author": {
+        "type": "object",
+        "properties": {
+          "nickname": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "city": {
+            "type": "string"
+          }
+        },
+        "description": "Автор отзыва"
+      },
+      "Review": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "stars": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          },
+          "author": {
+            "$ref": "#/components/schemas/Author"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Отзыв пользователя"
+      },
+      "ReviewPage": {
+        "type": "object",
+        "properties": {
+          "recipeId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "averageStars": {
+            "type": "number",
+            "format": "double"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Review"
+            }
+          }
+        },
+        "description": "Страница отзывов по рецепту"
+      },
+      "IngredientInfo": {
+        "type": "object",
+        "properties": {
+          "ingredientId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "qtyNeeded": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "onHand": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "RecipeIngredientResponse": {
+        "type": "object",
+        "properties": {
+          "recipeName": {
+            "type": "string"
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IngredientInfo"
+            }
+          }
+        },
+        "description": "Рецепт с раскрытым составом ингредиентов и текущими остатками"
+      },
+      "PageOrderResponse": {
+        "type": "object",
+        "properties": {
+          "totalPages": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderResponse"
+            }
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/SortObject"
+          },
+          "first": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "boolean"
+          },
+          "numberOfElements": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageable": {
+            "$ref": "#/components/schemas/PageableObject"
+          },
+          "empty": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OrderPreparationResponse": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PAID",
+              "PREPARING",
+              "DONE",
+              "CANCELLED"
+            ]
+          },
+          "progress": {
+            "type": "integer",
+            "description": "Прогресс в процентах [0..100]",
+            "format": "int32"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "eta": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "remainingSeconds": {
+            "type": "integer",
+            "description": "Сколько секунд осталось",
+            "format": "int64"
+          }
+        },
+        "description": "Состояние long-running операции приготовления заказа"
+      },
+      "IngredientResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "onHand": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "minLevel": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "supplier": {
+            "$ref": "#/components/schemas/SupplierInfo"
+          }
+        },
+        "description": "Ингредиент со склада с информацией о поставщике"
+      },
+      "SupplierInfo": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "SOAP",
+              "REST",
+              "GRPC"
+            ]
+          },
+          "leadTimeDays": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "Информация о поставщике (Requirement 3, AC#1)"
+      },
+      "EventLogResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "loggedInAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Публичные данные пользователя"
+      }
+    },
+    "securitySchemes": {
+      "bearer-jwt": {
+        "type": "http",
+        "description": "JWT-токен из POST /api/v1/auth/login",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}
