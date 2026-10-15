@@ -74,6 +74,14 @@ public class AuthenticationTests {
         AuthSteps.assertStatusCode(response, 401);
     }
 
+    @Test
+    @DisplayName("Запрос текущего пользователя с неверным токеном возвращает 401")
+    void getCurrentUserWithIncorrectToken() {
+        Response response = AuthSteps.getCurrentUser("incorrect token");
+
+        AuthSteps.assertStatusCode(response, 401);
+    }
+
     private static Stream<Arguments> loginBodiesWithMissingFields() {
         Map<String, String> withoutUsername = new HashMap<>();
         withoutUsername.put("password", Config.password());
