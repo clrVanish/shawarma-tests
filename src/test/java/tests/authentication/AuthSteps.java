@@ -1,21 +1,19 @@
 package tests.authentication;
 
+import clients.AuthApiClient;
 import io.qameta.allure.Step;
-import io.qameta.allure.restassured.AllureRestAssured;
-import io.restassured.http.ContentType;
 import io.restassured.response.Response;
-import io.restassured.specification.RequestSpecification;
-import utils.Config;
+import models.LoginResponse;
+import models.UserInfo;
 
 import java.util.Map;
 
-import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 public class AuthSteps {
 
-    private static final String LOGIN_PATH = "/auth/login";
-    private static final String CURRENT_USER_PATH = "/auth/me";
+    private static final AuthApiClient api = new AuthApiClient();
 
     @Step("Вход пользователем {username}")
     public static Response login(String username, String password) {
@@ -25,21 +23,12 @@ public class AuthSteps {
     // Тело не выводим в отчёт: в нём может быть пароль
     @Step("Вход с произвольным телом запроса")
     public static Response loginWithBody(Map<String, String> body) {
-        return given()
-                .filter(new AllureRestAssured())
-                .contentType(ContentType.JSON)
-                .body(body)
-                .when()
-                .post(Config.baseUrl() + LOGIN_PATH);
+        return api.loginRaw(body);
     }
 
     @Step("Запрос данных текущего пользователя")
     public static Response getCurrentUser(String token) {
-        RequestSpecification request = given().filter(new AllureRestAssured());
-        if (token != null) {
-            request.header("Authorization", "Bearer " + token);
-        }
-        return request.when().get(Config.baseUrl() + CURRENT_USER_PATH);
+        return api.getCurrentUserRaw(token);
     }
 
     @Step("Проверка статус-кода: {expected}")
@@ -51,31 +40,26 @@ public class AuthSteps {
 
     @Step("Проверка: в ответе есть непустой токен")
     public static void assertTokenIsPresent(Response response) {
-        assertThat(response.jsonPath().getString("token"))
+        assertThat(response.as(LoginResponse.class).token())
                 .as("Поле token в ответе")
                 .isNotBlank();
     }
 
-    @Step("Проверка полей ответа: {expectedFields}")
-    public static void assertResponseFields(Response response, Map<String, Class<?>> expectedFields) {
-        Map<String, Object> body = response.jsonPath().getMap("$");
-        expectedFields.forEach((field, type) -> {
-            assertThat(body)
-                    .as("Поле '%s' есть в ответе", field)
-                    .containsKey(field);
-            assertThat(body.get(field))
-                    .as("Тип поля '%s'", field)
-                    .isInstanceOf(type);
+    @Step("Проверка полей ответа логина")
+    public static void assertLoginResponse(Response response) {
+        LoginResponse body = response.as(LoginResponse.class);
+        assertSoftly(softly -> {
+            softly.assertThat(body.token()).as("token").isNotBlank();
+            softly.assertThat(body.type()).as("type").isNotBlank();
+            softly.assertThat(body.username()).as("username").isNotBlank();
+            softly.assertThat(body.expiresIn()).as("expiresIn").isNotNull();
         });
     }
 
     @Step("Проверка данных текущего пользователя")
     public static void assertCurrentUserInfoPresent(Response response) {
-        assertThat(response.jsonPath().getString("username"))
-                .as("Поле username")
-                .isNotBlank();
-        assertThat(response.jsonPath().getString("loggedInAt"))
-                .as("Поле loggedInAt")
-                .isNotBlank();
+        UserInfo body = response.as(UserInfo.class);
+        assertThat(body.username()).as("Поле username").isNotBlank();
+        assertThat(body.loggedInAt()).as("Поле loggedInAt").isNotBlank();
     }
 }

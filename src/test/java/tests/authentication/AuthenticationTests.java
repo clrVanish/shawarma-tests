@@ -1,6 +1,10 @@
 package tests.authentication;
 
+import clients.AuthApiClient;
+import factories.AuthFactory;
 import io.restassured.response.Response;
+import models.LoginResponse;
+import models.UserInfo;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -8,11 +12,12 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import utils.Config;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
 public class AuthenticationTests {
+
+    private final AuthApiClient api = new AuthApiClient();
 
     @Test
     @DisplayName("Вход с верными логином и паролем возвращает 200 и токен")
@@ -27,7 +32,7 @@ public class AuthenticationTests {
     @MethodSource("loginBodiesWithMissingFields")
     @DisplayName("Вход без обязательных полей возвращает 400")
     void loginWithMissingFieldsReturns400(String caseName, Map<String, String> body) {
-        Response response = AuthSteps.loginWithBody(body);
+        Response response = api.loginRaw(body);
 
         AuthSteps.assertStatusCode(response, 400);
     }
@@ -36,7 +41,7 @@ public class AuthenticationTests {
     @MethodSource("loginBodiesWithInvalidCredentials")
     @DisplayName("Вход с неверными логином или паролем возвращает 400")
     void loginWithInvalidCredentialsReturns400(String caseName, Map<String, String> body) {
-        Response response = AuthSteps.loginWithBody(body);
+        Response response = api.loginRaw(body);
 
         AuthSteps.assertStatusCode(response, 400);
     }
@@ -47,10 +52,7 @@ public class AuthenticationTests {
         Response response = AuthSteps.login(Config.username(), Config.password());
 
         AuthSteps.assertStatusCode(response, 200);
-        AuthSteps.assertResponseFields(response, Map.of(
-                "type", String.class,
-                "username", String.class,
-                "expiresIn", Number.class));
+        AuthSteps.assertLoginResponse(response);
     }
 
     @Test
@@ -58,7 +60,7 @@ public class AuthenticationTests {
     void getCurrentUserWithTokenReturns200AndUserInfo() {
         Response loginResponse = AuthSteps.login(Config.username(), Config.password());
         AuthSteps.assertTokenIsPresent(loginResponse);
-        String token = loginResponse.jsonPath().getString("token");
+        String token = loginResponse.as(LoginResponse.class).token();
 
         Response response = AuthSteps.getCurrentUser(token);
 
@@ -69,7 +71,7 @@ public class AuthenticationTests {
     @Test
     @DisplayName("Запрос текущего пользователя без токена возвращает 401")
     void getCurrentUserWithoutTokenReturns401() {
-        Response response = AuthSteps.getCurrentUser(null);
+        Response response = api.getCurrentUserRaw(null);
 
         AuthSteps.assertStatusCode(response, 401);
     }
@@ -77,44 +79,22 @@ public class AuthenticationTests {
     @Test
     @DisplayName("Запрос текущего пользователя с неверным токеном возвращает 401")
     void getCurrentUserWithIncorrectToken() {
-        Response response = AuthSteps.getCurrentUser("incorrect token");
+        Response response = api.getCurrentUserRaw("incorrect token");
 
         AuthSteps.assertStatusCode(response, 401);
     }
 
     private static Stream<Arguments> loginBodiesWithMissingFields() {
-        Map<String, String> withoutUsername = new HashMap<>();
-        withoutUsername.put("password", Config.password());
-
-        Map<String, String> withoutPassword = new HashMap<>();
-        withoutPassword.put("username", Config.username());
-
-        Map<String, String> emptyFields = new HashMap<>();
-        emptyFields.put("username", "");
-        emptyFields.put("password", "");
-
         return Stream.of(
-                Arguments.of("без username", withoutUsername),
-                Arguments.of("без password", withoutPassword),
-                Arguments.of("пустые username и password", emptyFields));
+                Arguments.of("без username", AuthFactory.missingUsername()),
+                Arguments.of("без password", AuthFactory.missingPassword()),
+                Arguments.of("пустые username и password", AuthFactory.emptyFields()));
     }
 
     private static Stream<Arguments> loginBodiesWithInvalidCredentials() {
-        Map<String, String> invalidUsername = new HashMap<>();
-        invalidUsername.put("username", Config.invalidUsername());
-        invalidUsername.put("password", Config.password());
-
-        Map<String, String> invalidPassword = new HashMap<>();
-        invalidPassword.put("username", Config.username());
-        invalidPassword.put("password", Config.invalidPassword());
-
-        Map<String, String> invalidBoth = new HashMap<>();
-        invalidBoth.put("username", Config.invalidUsername());
-        invalidBoth.put("password", Config.invalidPassword());
-
         return Stream.of(
-                Arguments.of("неверный username", invalidUsername),
-                Arguments.of("неверный password", invalidPassword),
-                Arguments.of("неверные username и password", invalidBoth));
+                Arguments.of("неверный username", AuthFactory.invalidUsername().toMap()),
+                Arguments.of("неверный password", AuthFactory.invalidPassword().toMap()),
+                Arguments.of("неверные username и password", AuthFactory.invalidBoth().toMap()));
     }
 }

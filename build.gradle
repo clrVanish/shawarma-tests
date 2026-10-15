@@ -1,12 +1,11 @@
 plugins {
     id 'java'
-    id("io.freefair.lombok") version "9.7.0"
     id("io.qameta.allure") version "4.3.0"
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.compilerArgs
+    options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
 }
 
 tasks.withType(Test).configureEach {
@@ -27,7 +26,8 @@ dependencies {
     testImplementation("tools.jackson.core:jackson-databind:3.2.3")
     testImplementation 'org.assertj:assertj-core:3.27.7'
     testImplementation 'io.rest-assured:rest-assured:6.0.1'
-    testImplementation 'io.qameta.allure:allure-rest-assured:2.35.5'}
+    testImplementation 'io.qameta.allure:allure-rest-assured:2.35.5'
+}
 
 test {
     useJUnitPlatform()
