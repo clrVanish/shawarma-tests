@@ -53,6 +53,13 @@ bin/
 # local test config with credentials (not committed)
 src/test/resources/config.properties
 
+.agents
+.vibe-notes
+AGENTS.md
+AUTH_TEST_FLOW.md
 automation-checklist.md
+CLAUDE.md
+conventions.md
 info.md
 src/main
+vibe-learn
