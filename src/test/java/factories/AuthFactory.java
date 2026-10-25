@@ -37,9 +37,7 @@ public final class AuthFactory {
     }
 
     public static Map<String, String> missingUsername() {
-        Map<String, String> body = new HashMap<>();
-        body.put("password", Config.password());
-        return body;
+        return Map.of("password", Config.password());
     }
 
     public static Map<String, String> missingPassword() {
