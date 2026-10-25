@@ -2,6 +2,7 @@ package utils;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Properties;
 
 public final class Config {
@@ -35,12 +36,10 @@ public final class Config {
     }
 
     private static String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value;
-            }
-        }
-        return null;
+        return Arrays.stream(values)
+                .filter(v -> v != null && !v.isBlank())
+                .findFirst()
+                .orElse(null);
     }
 
     private static String required(String key, String envKey) {
