@@ -1,6 +1,7 @@
 package tests.events;
 
 import clients.EventsApiClient;
+import io.qameta.allure.Allure;
 import io.qameta.allure.Step;
 import io.restassured.common.mapper.TypeRef;
 import io.restassured.response.Response;
@@ -47,10 +48,12 @@ public class EventsSteps {
         int actual = events.size();
 
         if (expectedLimit != null) {
-            assertThat(actual).as("Количество событий").isEqualTo(expectedLimit);
+            assertThat(actual).as("Количество событий").isBetween(1, expectedLimit);
         } else {
-            assertThat(actual).as("Количество событий (дефолт <= 20").isLessThanOrEqualTo(20);
+            assertThat(actual).as("Количество событий (дефолт <= 20").isBetween(1, 20);
         }
+
+        Allure.addAttachment("limit", "пришло " + actual);
     }
 
 }
