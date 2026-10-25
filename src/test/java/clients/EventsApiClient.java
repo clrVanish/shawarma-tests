@@ -1,6 +1,7 @@
 package clients;
 
 import io.qameta.allure.restassured.AllureRestAssured;
+import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.common.mapper.TypeRef;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
@@ -14,17 +15,17 @@ import static io.restassured.RestAssured.given;
 
 public class EventsApiClient {
 
-    private final RequestSpecification spec;
+    private final RequestSpecBuilder base;
 
     public EventsApiClient() {
-        this.spec = given()
-                .contentType(ContentType.JSON)
-                .baseUri(Config.baseUrl())
-                .filter(new AllureRestAssured());
+        this.base = new RequestSpecBuilder()
+                .setContentType(ContentType.JSON)
+                .setBaseUri(Config.baseUrl())
+                .addFilter(new AllureRestAssured());
     }
 
     public Response getEventsRaw(String token, Integer limit, String type) {
-        RequestSpecification req = spec;
+        RequestSpecification req = given().spec(base.build());
         if (token != null) {
             req = req.header("Authorization", "Bearer " + token);
         }
