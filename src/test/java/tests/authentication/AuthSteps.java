@@ -26,16 +26,16 @@ public class AuthSteps {
         return api.loginRaw(body);
     }
 
+    @Step("Вход пользователем {username} и получение токена")
+    public static String loginAndGetToken(String username, String password) {
+        Response response = login(username, password);
+        assertTokenIsPresent(response);
+        return response.as(LoginResponse.class).token();
+    }
+
     @Step("Запрос данных текущего пользователя")
     public static Response getCurrentUser(String token) {
         return api.getCurrentUserRaw(token);
-    }
-
-    @Step("Проверка статус-кода: {expected}")
-    public static void assertStatusCode(Response response, int expected) {
-        assertThat(response.statusCode())
-                .as("Статус-код ответа")
-                .isEqualTo(expected);
     }
 
     @Step("Проверка: в ответе есть непустой токен")

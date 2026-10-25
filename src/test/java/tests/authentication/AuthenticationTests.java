@@ -15,6 +15,8 @@ import utils.Config;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static assertions.ResponseAssertions.assertStatusCode;
+
 public class AuthenticationTests {
 
     private final AuthApiClient api = new AuthApiClient();
@@ -24,7 +26,7 @@ public class AuthenticationTests {
     void loginWithValidCredentialsReturns200AndToken() {
         Response response = AuthSteps.login(Config.username(), Config.password());
 
-        AuthSteps.assertStatusCode(response, 200);
+        assertStatusCode(response, 200);
         AuthSteps.assertTokenIsPresent(response);
     }
 
@@ -34,7 +36,7 @@ public class AuthenticationTests {
     void loginWithMissingFieldsReturns400(String caseName, Map<String, String> body) {
         Response response = api.loginRaw(body);
 
-        AuthSteps.assertStatusCode(response, 400);
+        assertStatusCode(response, 400);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -43,7 +45,7 @@ public class AuthenticationTests {
     void loginWithInvalidCredentialsReturns400(String caseName, Map<String, String> body) {
         Response response = api.loginRaw(body);
 
-        AuthSteps.assertStatusCode(response, 400);
+        assertStatusCode(response, 400);
     }
 
     @Test
@@ -51,7 +53,7 @@ public class AuthenticationTests {
     void loginResponseContainsTypeUsernameAndExpiresIn() {
         Response response = AuthSteps.login(Config.username(), Config.password());
 
-        AuthSteps.assertStatusCode(response, 200);
+        assertStatusCode(response, 200);
         AuthSteps.assertLoginResponse(response);
     }
 
@@ -64,7 +66,7 @@ public class AuthenticationTests {
 
         Response response = AuthSteps.getCurrentUser(token);
 
-        AuthSteps.assertStatusCode(response, 200);
+        assertStatusCode(response, 200);
         AuthSteps.assertCurrentUserInfoPresent(response);
     }
 
@@ -73,7 +75,7 @@ public class AuthenticationTests {
     void getCurrentUserWithoutTokenReturns401() {
         Response response = api.getCurrentUserRaw(null);
 
-        AuthSteps.assertStatusCode(response, 401);
+        assertStatusCode(response, 401);
     }
 
     @Test
@@ -81,7 +83,7 @@ public class AuthenticationTests {
     void getCurrentUserWithIncorrectToken() {
         Response response = api.getCurrentUserRaw("incorrect token");
 
-        AuthSteps.assertStatusCode(response, 401);
+        assertStatusCode(response, 401);
     }
 
     private static Stream<Arguments> loginBodiesWithMissingFields() {

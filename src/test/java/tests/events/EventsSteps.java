@@ -21,13 +21,6 @@ public class EventsSteps {
         return api.getEventsRaw(token, limit, type);
     }
 
-    @Step("Проверка статус кода: {expected}")
-    public static void assertStatusCode(Response response, int expected) {
-        assertThat(response.statusCode())
-                .as("Статус-код ответа")
-                .isEqualTo(expected);
-    }
-
     @Step("Проверка полей ответа событий")
     public static void assertEventsResponse(Response response) {
         List<EventLogResponse> events = response.as(new TypeRef<List<EventLogResponse>>() {});
